@@ -1,6 +1,9 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import logging
+from flask import Flask
+from threading import Thread
+import os
 
 # Логирование (только для отладки, не хранит личные данные)
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -11,6 +14,21 @@ TOKEN = "8320394259:AAFvODL3IxxehnmAfozR0mSY8VJI9b_tbwU"  # 👈 ЗАМЕНИ Н
 
 # 🧠 Хранилище: только ID чатов, куда можно рассылать
 subscribers = set()
+
+# 🌐 Веб-сервер для Render (чтобы не было ошибки "Port scan timeout")
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "🚀 Анонимный чат-бот работает 24/7", 200
+
+def run_web():
+    port = int(os.environ.get('PORT', 10000))  # Render требует PORT
+    app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_web)
+    t.start()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -64,6 +82,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Сообщение отправлено анонимно всем.")
 
 def main():
+    # Запускаем веб-сервер ДО бота
+    keep_alive()
+
     application = Application.builder().token(TOKEN).build()
 
     application.add_handler(CommandHandler("start", start))
@@ -74,4 +95,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
