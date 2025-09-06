@@ -7,7 +7,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # ⚙️ НАСТРОЙКИ
-TOKEN = "YOUR_BOT_TOKEN_HERE"  # 👈 ЗАМЕНИ НА ТОКЕН ОТ @BotFather
+TOKEN = "8320394259:AAFvODL3IxxehnmAfozR0mSY8VJI9b_tbwU"  # 👈 ЗАМЕНИ НА ТОКЕН ОТ @BotFather
 
 # 🧠 Хранилище: только ID чатов, куда можно рассылать
 subscribers = set()
@@ -74,3 +74,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
