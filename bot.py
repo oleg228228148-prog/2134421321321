@@ -1,107 +1,71 @@
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
-import logging
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 from flask import Flask
-from threading import Thread
+import threading
 import os
 
-# Логирование
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Токен бота (получи у @BotFather)
+TOKEN = os.environ.get('TELEGRAM_TOKEN')
+# URL вебхука (для Replit: https://твоё-имя-проекта.username.repl.co)
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL')
 
-# ⚙️ НАСТРОЙКИ — токен должен быть в Environment Variables!
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # 👈 ЗАМЕНИ НА ТОКЕН ОТ @BotFather (через Render Secrets)
+# Список ID пользователей, кто уже начал чат с ботом
+users = set()
 
-if not TOKEN:
-    raise ValueError("❌ Переменная окружения TELEGRAM_BOT_TOKEN не задана. Задай её в Render!")
-
-# 🧠 Хранилище: только ID чатов, куда можно рассылать
-subscribers = set()
-
-# 🌐 Веб-сервер для Render (чтобы не было ошибки "Port scan timeout")
+# Flask для UptimeRobot
 app = Flask(__name__)
 
 @app.route('/')
-def home():
-    return "🚀 Анонимный чат-бот работает 24/7", 200
+def index():
+    return "Анонимный чат-бот работает! 💬"
 
-def run_web():
-    port = int(os.environ.get('PORT', 10000))  # Render требует PORT
-    app.run(host='0.0.0.0', port=port)
+def run_flask():
+    app.run(host='0.0.0.0', port=8080)
 
-def keep_alive():
-    t = Thread(target=run_web)
-    t.start()
-
-# 🆘 Обработчик ошибок — чтобы бот не падал
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Произошла ошибка: {context.error}")
-    # Не останавливаем бота — просто логируем
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    subscribers.add(chat_id)
-    await update.message.reply_text(
-        "🔮 Добро пожаловать в *Абсолютно Анонимный Чат*.\n\n"
-        "📩 Пиши что угодно — твоё сообщение получат все участники.\n"
-        "👤 Никто не узнает, кто его отправил. Даже админ.\n"
-        "🚫 Никаких имён, ID, меток. Только твои слова.\n\n"
-        "Готов? Пиши первое сообщение 👇",
-        parse_mode="Markdown"
+# Команда /start
+def start(update: Update, context: CallbackContext):
+    user_id = update.message.chat_id
+    users.add(user_id)
+    update.message.reply_text(
+        "👋 Добро пожаловать в анонимный чат!\n"
+        "Отправь любое сообщение — оно анонимно увидят все участники.\n"
+        "⚠️ Никто не узнает, кто именно отправил."
     )
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    subscribers.add(chat_id)  # добавляем нового пользователя
+# Обработка сообщений
+def handle_message(update: Update, context: CallbackContext):
+    user_id = update.message.chat_id
+    text = update.message.text
 
-    # Определяем тип контента
-    if update.message.text:
-        content = update.message.text
-        is_voice = False
-    elif update.message.voice:
-        content = update.message.voice.file_id
-        is_voice = True
-    else:
-        await update.message.reply_text("Поддерживаются только текст и голосовые сообщения.")
-        return
+    # Добавляем пользователя, если его ещё нет
+    users.add(user_id)
 
-    # Рассылаем ВСЕМ (включая отправителя — для ощущения чата)
-    broadcast_text = "📩 Новое анонимное сообщение:" if not is_voice else "📩 Новое анонимное голосовое:"
+    # Рассылаем сообщение всем, кроме отправителя
+    for chat_id in users:
+        if chat_id != user_id:
+            try:
+                context.bot.send_message(chat_id=chat_id, text=f"👤 Аноним: {text}")
+            except Exception as e:
+                print(f"Ошибка отправки в {chat_id}: {e}")
 
-    success_count = 0
-    failed_ids = set()
-
-    for target_id in list(subscribers):  # копируем, чтобы избежать ошибок при удалении
-        try:
-            await context.bot.send_message(chat_id=target_id, text=broadcast_text)
-            if is_voice:
-                await context.bot.send_voice(chat_id=target_id, voice=content)
-            else:
-                await context.bot.send_message(chat_id=target_id, text=content)
-            success_count += 1
-        except Exception as e:
-            logger.error(f"Не удалось отправить сообщение в {target_id}: {e}")
-            failed_ids.add(target_id)
-
-    # Удаляем неактивных (заблокировали бота и т.п.)
-    for bad_id in failed_ids:
-        subscribers.discard(bad_id)
-
-    await update.message.reply_text("✅ Сообщение отправлено анонимно всем.")
-
+# Основной запуск бота
 def main():
-    # Запускаем веб-сервер ДО бота
-    keep_alive()
+    updater = Updater(TOKEN, use_context=True)
+    dp = updater.dispatcher
 
-    application = Application.builder().token(TOKEN).build()
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
-    application.add_error_handler(error_handler)  # 👈 Добавили обработчик ошибок
+    # Устанавливаем вебхук
+    updater.bot.set_webhook(url=WEBHOOK_URL)
 
-    logger.info("🚀 Абсолютно анонимный чат-бот запущен. Никто не знает автора — даже админ.")
-    application.run_polling()
+    # Запуск Flask в отдельном потоке
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.start()
+
+    # Запуск бота (polling не нужен при вебхуке, но для Replit оставим для fallback)
+    updater.start_polling()
+    updater.idle()
 
 if __name__ == '__main__':
     main()
-
