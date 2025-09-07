@@ -10,7 +10,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # ⚙️ НАСТРОЙКИ — токен должен быть в Environment Variables!
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # 👈 ЗАМЕНИ НА ТОКЕН ОТ @BotFather (через Render Secrets)
+TOKEN = os.getenv("8320394259:AAFvODL3IxxehnmAfozR0mSY8VJI9b_tbwU")  # 👈 ЗАМЕНИ НА ТОКЕН ОТ @BotFather (через Render Secrets)
 
 if not TOKEN:
     raise ValueError("❌ Переменная окружения TELEGRAM_BOT_TOKEN не задана. Задай её в Render!")
@@ -104,3 +104,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
