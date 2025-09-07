@@ -5,12 +5,15 @@ from flask import Flask
 from threading import Thread
 import os
 
-# Логирование (только для отладки, не хранит личные данные)
+# Логирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ⚙️ НАСТРОЙКИ
-TOKEN = "8320394259:AAFvODL3IxxehnmAfozR0mSY8VJI9b_tbwU"  # 👈 ЗАМЕНИ НА ТОКЕН ОТ @BotFather
+# ⚙️ НАСТРОЙКИ — токен должен быть в Environment Variables!
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # 👈 ЗАМЕНИ НА ТОКЕН ОТ @BotFather (через Render Secrets)
+
+if not TOKEN:
+    raise ValueError("❌ Переменная окружения TELEGRAM_BOT_TOKEN не задана. Задай её в Render!")
 
 # 🧠 Хранилище: только ID чатов, куда можно рассылать
 subscribers = set()
@@ -29,6 +32,11 @@ def run_web():
 def keep_alive():
     t = Thread(target=run_web)
     t.start()
+
+# 🆘 Обработчик ошибок — чтобы бот не падал
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Произошла ошибка: {context.error}")
+    # Не останавливаем бота — просто логируем
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -89,6 +97,7 @@ def main():
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
+    application.add_error_handler(error_handler)  # 👈 Добавили обработчик ошибок
 
     logger.info("🚀 Абсолютно анонимный чат-бот запущен. Никто не знает автора — даже админ.")
     application.run_polling()
